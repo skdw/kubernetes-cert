@@ -86,6 +86,9 @@ Node types:
 kubectl config get-contexts
 kubectl config use-context arn:aws:eks:<EKS_CLUSTER>
 kubectl config use-context minikube
+
+~/.kube/config contains:
+  endpoints, SSL keys, contexts
 ```
 #### Connect to Google Cloud
 - Create a VPC network
@@ -95,6 +98,50 @@ kubectl config use-context minikube
 - Create instance / equivalent command line / equivalent REST
 - Paste SSH key
 
+### Installation & configuration
+```
+# Simple get, create, describe
+kubectl get pods,deployments,services,events,logs
+kubectl get deployment -o yaml > first.yaml
+kubectl create deployment -f first.yaml
+kubectl describe deployment
+
+# Dump to yaml, re-deploy modifies
+kubectl get deployment nginx -o yaml > second.yaml
+diff first.yaml second.yaml
+kubectl create deployment two --image=nginx --dry-run=client -o yaml
+
+# Create a service to view the welcome page
+kubectl expose deployment/nginx
+> error: couldn't find port via --port flag or introspection
+vim first.yaml
+> ports:
+  - containerPort: 80
+    protocol: TCP
+kubectl replace -f first.yaml --force
+
+kubectl get deploy,pod
+kubectl expose deployment/nginx
+> service/nginx exposed
+kubectl get svc nginx  # get service
+kubectl get ep nginx   # get endpoint
+curl ip_address:80
+```
+#### Access from outside the cluster
+```
+# Print env
+kubectl exec nginx-1423793266-13p69 \
+  -- printenv |grep KUBERNETES
+...
+kubectl expose deployment nginx --type=LoadBalancer
+kubectl get svc
+curl ip_address:80
+```
+#### Scale
+```
+kubectl scale deployment nginx --replicas=0 # terminate
+kubectl scale deployment nginx --replicas=2 # restart
+```
 ### Ingress
 - Ingress - data **entering** the system, i.e. visitor's request to view a webpage
 - Egress - data **leaving** the system, i.e. file being downloaded from a server
