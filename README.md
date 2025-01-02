@@ -41,21 +41,27 @@ Docker Swarm, Apache Mesos, Nomad ...
 [Google Cloud podcast](https://www.gcppodcast.com/post/episode-46-borg-and-k8s-with-john-wilkes/)
 
 ### Kubernetes architecture
-Every node running a container would have two processes:
-- `kubelet` - systemd process, receives requests to run the containers
-- `kube-proxy` - creates manages net rules to expose the container on the network
 
 Node types:
-- control plane (cp) nodes - run API server, scheduler, state storage...
-- worker nodes (minions)
+- **Control Plane** (cp), master nodes
+  - `kube-apiserver` agent - all other agents send their requests to `kube-api` to authenticate, authorize and send them do destination
+  - `kube-scheduler` - determines which node will host a Pod of containers
+  - `etcd` database
+  - state storage...
+- **Worker** nodes (minions)
+  - `kubelet` - primary agent: systemd process, receives requests to run the containers, download images, configurations, sends back status to `kube-apiserver`
+  - `kube-proxy` - creates manages net rules to expose the container on the network
 
 `etcd` is a consistent and highly-available key value store used as Kubernetes' backing store for all cluster data
+only `kube-apiserver` talks to `etcd` database so that it is responsible for the persistent state of the database
+
+[Fluentd](fluentd.org) - logging mechanism across cluster
 
 ### Terminology
 - **Containers** are part of `Pod` (larger object)
   - they share an IP address, access to storage, namespace
   - one container in a Pod runs app and others support the primary app
-- Orchestration is managed through a series of watch-loops, called controllers or `operators`
+- Orchestration is managed through a series of watch-loops, called controllers or `operators` - mechanism to watch and react to changes in resources within a Kubernetes cluster
 - Each controller interrogates the `kube-apiserver` for a particular object state
   - modifying the object until the declated state matches the current state
   - these controllers are compiled into the `kube-controller-manager`
