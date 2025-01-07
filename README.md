@@ -275,6 +275,9 @@ VM instances: master, worker
 - [Blog](https://cloudchamp.notion.site/How-I-Passed-my-CKA-Exam-55fef633b454438aadc54a7261312ec9)
 
 ### [Exam questions](https://skillcertpro.com/product/certified-kubernetes-administrator-cka-exam-questions/)
+
+### [Practice exercises GitHub repo](https://github.com/alijahnas/CKA-practice-exercises/)
+
 ### TOPICS to absolutely know before sitting the exam
 
 1. [ETCD Backup & Restore](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/)
