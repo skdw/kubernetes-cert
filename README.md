@@ -40,23 +40,6 @@ Docker Swarm, Apache Mesos, Nomad ...
 ### Borg heritage
 [Google Cloud podcast](https://www.gcppodcast.com/post/episode-46-borg-and-k8s-with-john-wilkes/)
 
-### Kubernetes architecture
-
-Node types:
-- **Control Plane** (cp), master nodes
-  - `kube-apiserver` agent - all other agents send their requests to `kube-api` to authenticate, authorize and send them do destination
-  - `kube-scheduler` - determines which node will host a Pod of containers
-  - `etcd` database
-  - state storage...
-- **Worker** nodes (minions)
-  - `kubelet` - primary agent: systemd process, receives requests to run the containers, download images, configurations, sends back status to `kube-apiserver`
-  - `kube-proxy` - creates manages net rules to expose the container on the network
-
-`etcd` is a consistent and highly-available key value store used as Kubernetes' backing store for all cluster data
-only `kube-apiserver` talks to `etcd` database so that it is responsible for the persistent state of the database
-
-[Fluentd](fluentd.org) - logging mechanism across cluster
-
 ### Terminology
 - **Containers** are part of `Pod` (larger object)
   - they share an IP address, access to storage, namespace
@@ -76,6 +59,113 @@ only `kube-apiserver` talks to `etcd` database so that it is responsible for the
 
 - `labels` - arbitrary strings which become part of the object metadata
 - Nodes can have `taints` to discourage Pod assignments, unless the Pod has a `toleration` in its metadata
+
+### Kubernetes architecture
+
+Node types:
+- **Control Plane** (cp), master nodes
+  - `kube-apiserver` agent - all other agents send their requests to `kube-api` to authenticate, authorize and send them do destination
+  - `kube-scheduler` - determines which node will host a Pod of containers
+  - `etcd` database
+  - state storage...
+- **Worker** nodes (minions)
+  - `kubelet` - primary agent: systemd process, receives requests to run the containers, download images, configurations, sends back status to `kube-apiserver`
+  - `kube-proxy` - creates manages net rules to expose the container on the network
+
+`etcd` is a consistent and highly-available key value store used as Kubernetes' backing store for all cluster data
+only `kube-apiserver` talks to `etcd` database so that it is responsible for the persistent state of the database
+
+[Fluentd](fluentd.org) - logging mechanism across cluster
+
+#### Operators
+
+Controllers / watch-loops
+
+Simplified view is an agent, or Informer, and a downstream store
+Using a `DeltaFIFO` queue, the source and downstream are compared
+A loop process receives an `obj` / object, which is an array of deltas from the FIFO queue
+As long as the delta is not of type `Deleted`, the logic of the operator is used to create or modify some object until it matches the specification
+
+`DeltaFIFO` is like FIFO, but [allows you to process deletes](https://lairdnelson.wordpress.com/2018/01/07/understanding-kubernetes-tools-cache-package-part-4/)
+
+- `Informer` - uses the API server as a source requests the state of an object via an API call
+- `SharedInformer` - objects are often used by multiple other objects, creates a shared cache of the state for multiple requests
+- `Workqueue` - uses a key to hand out tasks to various workers
+- `endpoints`, `namespace`, `serviceaccounts` operators each manage the eponymous resources for Pods
+
+#### Service operators
+
+Flexible and scalable agents which **connect resources together** and will reconnect, should something die and a replacement is spawned. A service is an operator which listens to the endpoint operator to provide a persistent IP for Pods. Pods have ephemeral IP addresses chosen from a pool.
+
+Service responsibilities:
+- Connect Pods together
+- Expose Pods to Internet
+- Decouple settings
+- Define Pod access policy
+
+#### Pods
+
+- Goal: orchestrate the lifecycle of a container, do not interact with particular containers
+- **Pod** - smallest unit we can work with
+- Design of a Pod typically follows a one-process-per-container architecture
+- Containers in a Pod are started in parallel
+- Only one IP address per Pod
+- Communication within Pod: IPC / loopback / shared filesystem
+- Sidecar - a container dedicated to performing a helper, i.e. logger
+
+#### Rewrite legacy application
+
+- Legacy - well known, high replacement cost
+- Cloud-native - flexible, low outage effect, little traffic issues
+
+#### Containers
+
+While orchestration does not allow direct manipulation on a container level, we can manage the resources containers are allowed to consume
+
+`PodSpec` / `resources` -> limits CPU, memory
+
+#### Init Containers
+
+Standard containers are sent to the container engine at the same time, and may start in any order
+**Init container** must complete before app containers will be started
+
+Init container can have a different view of the storage and security settings, which allows utilities and commands to be used, which the application would not be allowed to use.
+
+Example:
+- Run init container `sh -c until ls /db/dir; do sleep 5; done;`
+- Run main app container that reads from database
+
+#### Nodes
+
+- One IP per Pod
+- `NodePort` service connects the Pod to outside network
+- Containers share the same namespace and the same IP address
+
+#### Services
+
+A Service connects one pod to another, or to outside of the cluster
+
+Example: primary container App, optional sidecar Logger
+
+#### Networking Setup
+
+[Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
+
+The three main networking challenges to solve in a container orchestration system are:
+- Coupled container-to-container communication (solved by the pod concept)
+- Pod-to-pod communication -> software like Flannel
+- External-to-pod communication
+
+#### CNI Network Configuration File
+
+To provide container networking, Kubernetes is standardizing on the Container Network Interface (CNI) specification.
+
+[CNI GitHub](https://github.com/containernetworking/cni)
+
+### Ingress
+- Ingress - data **entering** the system, i.e. visitor's request to view a webpage
+- Egress - data **leaving** the system, i.e. file being downloaded from a server
+Traffic is handled by proper services
 
 ### Getting started
 
@@ -148,11 +238,35 @@ curl ip_address:80
 kubectl scale deployment nginx --replicas=0 # terminate
 kubectl scale deployment nginx --replicas=2 # restart
 ```
-### Ingress
-- Ingress - data **entering** the system, i.e. visitor's request to view a webpage
-- Egress - data **leaving** the system, i.e. file being downloaded from a server
-
 VM instances: master, worker
+
+### Architecture labs
+
+#### [EXAM] Backup the `etcd` database
+
+`kubectl -n kube-system exec -it etcd-cp ...`
+
+#### [EXAM] Perform cluster upgrade
+
+- `kubectl drain cp` - prepare for maintenance
+- `sudo kubeadm upgrade plan` - pre-flight checks
+- `sudo kubeadm upgrade apply v1.31.1`
+
+#### [EXAM] Working with CPU and Memory Constraints
+
+- YAML output to configuration file
+- vim `hog.yaml`
+- `resources` `limits` `requests`
+- `kubectl replace -f hog.yml`
+- `kubectl get po`
+- `kubectl logs <POD_NAME>` -> Allocating memory logs
+
+#### [EXAM] Resource limits for a namespace
+
+- `kubectl create namespace`
+- `vim low-resource-range.yaml`
+- `kubectl create -f low-resource-range.yaml -n low-usage-limit`
+- `kubectl -n low-usage-limit create deployment...` - create in namespace
 
 ## CKA Exam
 
