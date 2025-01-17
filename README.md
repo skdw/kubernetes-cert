@@ -49,9 +49,11 @@ Docker Swarm, Apache Mesos, Nomad ...
   - modifying the object until the declated state matches the current state
   - these controllers are compiled into the `kube-controller-manager`
 - Default and feature-filled operator for containers is a `Deployment`
-  - A Deployment does not directly work with pods. Instead it manages `ReplicaSets`
-- `ReplicaSet` is an operator which will create or terminate pods according to a `podSpec`
-- `podSpec` is sent to the `kubelet`, which then interacts with the container engine 
+  - A Deployment does not directly work with pods. Instead it manages `ReplicaSets`.
+  - Deployment can do rolling updates and rollbacks -> update without downtown / quickly revert previous version
+- `ReplicaSet` is an operator which will create or terminate pods according to a `podSpec`.
+  - It ensures that a specified number of identical copies (replicas) of your application are always running.
+- `podSpec` is sent to the `kubelet`, which then interacts with the container engine
   - download and make available the required resources
   - spawn or terminate containers until the status matches the spec
 - A service is used to communicate between pods, namespaces, and outside the cluster
@@ -113,6 +115,12 @@ Service responsibilities:
 - Communication within Pod: IPC / loopback / shared filesystem
 - Sidecar - a container dedicated to performing a helper, i.e. logger
 
+Pod template includes:
+- apiVersion
+- kind
+- metadata
+- spec
+
 #### Rewrite legacy application
 
 - Legacy - well known, high replacement cost
@@ -162,6 +170,70 @@ To provide container networking, Kubernetes is standardizing on the Container Ne
 
 [CNI GitHub](https://github.com/containernetworking/cni)
 
+### APIs
+
+REST-based API -> `kube-apiserver` communicates
+
+`curl` query to the agent will expose the current API groups
+
+json serialization
+```
+$ curl --cert userbob.pem --key userBob-key.pem \
+--cacert /path/to/ca.pem \
+https://k8sServer:6443/api/v1/pods
+```
+OpenAPI specification, Swagger UI - documentation of API, dynamic interaction
+
+#### Check access
+```
+kubectl auth can-i create deployments --as bob
+```
+#### Annotations
+
+Annotate pods - allow for metadata to be included with an object that may be helpful outside of the Kubernetes object interaction
+
+key-value maps
+
+`kubectl annotate pods --all description='Production Pods' -n prod`
+
+#### Verbose watch REST API requests
+
+`kubectl --v=10 get pods firstpod`
+
+### API Objects
+
+- **Pod** (unit) - runs application container(s) with access to an IP address and storage
+- **Service** (abstraction) - allows for IP traffic between pods, or outside world
+
+Container < Pod < ReplicaSet < Deployment
+
+#### Controllers
+
+Controller - a control loop that watches the state of your cluster, then makes or requests changes where needed
+
+- **Deployment** - controller that updates ReplicaSets, ensures their creation
+- **ReplicaSet** - deploys pods of particular version or roll backs
+- **DaemonSet** - ensures that a particular type of pod is deployed on each of nodes
+  - useful to setup a logging daemon on each of nodes
+  - always runs a single Pod on each node
+- **StatefulSet** - each pod checked as an unique unit with ensured state; stable storage, stable network
+- **HorizontalPodAutoscaler** - stable resource, scales Replication Controllers based on target CPU usage
+- **VerticalPodAutoscaler** - adjusts the amount of CPU/memory requested by Pods
+- **ClusterAutoscaler** - adds nodes to the cluster if unable to deploy a Pod; removes on low utilization
+- **Job** - runs until the number of completions reached
+- **CronJob** - runs on regular basis
+- **Role Based Access Control (RBAC)** [[Security](#security)] - allows to define Roles withing a cluster and associate users to Roles, i.e. define a Role for someone who can only read pods in a specific namespace
+  - ClusterRole
+  - ClusterRoleBinding
+  - RoleBinding
+
+- **NetworkPolicy**
+- **Ingress**
+- **ConfigMap**
+- **Node Controller**
+- **PersistentVolumeClaim (PVC)**
+- **EndpointSlice**
+
 ### Ingress
 - Ingress - data **entering** the system, i.e. visitor's request to view a webpage
 - Egress - data **leaving** the system, i.e. file being downloaded from a server
@@ -184,7 +256,13 @@ kubectl config use-context arn:aws:eks:<EKS_CLUSTER>
 kubectl config use-context minikube
 
 ~/.kube/config contains:
-  endpoints, SSL keys, contexts
+  - apiVersion -> kube-apiserver where to assign the data
+  - clusters -> name of the cluster, where to send the API calls
+  - contexts -> one config file to set namespace, user, cluster
+  - current-context -> which cluster and user the kubectl command would use
+  - kind -> object type `Config`
+  - prferences -> optional, like colorizing output
+  - users -> nickname associated with credentials
 ```
 #### Connect to Google Cloud
 - Create a VPC network
@@ -267,6 +345,101 @@ VM instances: master, worker
 - `vim low-resource-range.yaml`
 - `kubectl create -f low-resource-range.yaml -n low-usage-limit`
 - `kubectl -n low-usage-limit create deployment...` - create in namespace
+
+### API labs
+
+#### TLS Access
+
+curl/golang client can be run with TLS keys
+
+calls to the `kube-apiserver` get or set a PodSpec, or desired state
+
+grab keys from `~/.kube/config`:
+ - `client-cert`
+ - `client-key-data`
+ - `certificate-authority-data`
+
+encode the keys: `echo $client | base64 -d - > ./client.pem`
+
+API server URL: `kubectl config view | grep server`
+
+CURL with cert:
+```sh
+curl --cert ./client.pem \
+--key ./client-key.pem --cacert ./ca.pem \
+https://k8scp:6443/api/v1/pods```
+
+CURL POST request `curlpod.json` - create a new pod:
+```sh
+curl --cert ./client.pem \
+--key ./client-key.pem --cacert ./ca.pem \
+https://k8scp:6443/api/v1/namespaces/default/pods \
+-XPOST -H'Content-Type: application/json' \
+-d@curlpod.json
+```
+#### Explore API calls
+
+`strace` - system call tracer; monitor and tamper with instructions between processes and the Linux kernel
+```
+strace kubectl get endpoints
+```
+`.kube/cache/discovery` ... `python -m json.tool v1/serverresources.json | grep kind`
+
+#### RESTful API Access
+
+With Bearer token
+```
+kubectl config view -> IP and port
+export token=$(kubectl create token default)
+
+# Check API-s
+curl https://k8scp:6443/apis --header "Authorization: Bearer $token" -k
+
+# Check API v1
+curl https://k8scp:6443/api/v1 --header "Authorization: Bearer $token" -k
+
+# Get a list of namespaces -> permission error
+curl \https://k8scp:6443/api/v1/namespaces --header "Authorization: Bearer $token" -k
+```
+#### Using the Proxy
+
+Proxy can be run from a node or within a Pod through the use of a sidecar
+
+Deploy a proxy listening to the loopback address, use `curl` to address the API server, no need to authenticate
+```
+kubectl proxy -h
+kubectl proxy --api-prefix=/ &
+-> [1] 22500
+   Starting to serve on 127.0.0.1:8001
+
+# Now proxy makes the requests on our behalf, access is granted
+curl http://127.0.0.1:8001/api/
+curl http://127.0.0.1:8001/api/v1/namespaces
+
+kill 22500
+```
+#### Working with Jobs
+
+Run objects a particular number of times
+```
+job.yaml
+  kind: Job
+  metadata:
+    name: sleepy
+  ...
+      command: ["/bin/sleep"]
+      args: ["3"]
+
+kubectl create -f job.yaml
+kubectl get job
+
+kubectl get jobs.batch sleepy -o yaml
+> spec parameters to affect how the job runs
+  - completions -> number of target task completions
+  - parallelism -> how many tasks at a time
+  - backoffLimit -> how many failures allowed
+  - activeDeadlineSeconds -> break task after a given time
+```
 
 ## CKA Exam
 
