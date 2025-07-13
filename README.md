@@ -234,6 +234,104 @@ Controller - a control loop that watches the state of your cluster, then makes o
 - **PersistentVolumeClaim (PVC)**
 - **EndpointSlice**
 
+### Managing State with Deployments
+
+- Most updates can be configured by editing a YAML file and running `kubectl apply`.
+- In-use config modification with `kubectl edit`
+
+#### Labels
+
+Arbitrary user-defined key-value pairs which can be attached to any resource, essential to administration.
+
+#### Example deployment generation
+```
+$ kubectl create deployment dev-web --image=nginx:1.21
+deployment "dev-web" created
+
+To generate the YAML file of newly created objects, run the following command:
+$ kubectl get deployments,rs,pods -o yaml
+
+  apiVersion: v1
+  items: ... # apiVersion kind (Deployment)
+  metadata: ... # name labels annotations podAffinity
+  spec: ... # Deployment spec: replicas matchLabels strategy
+  template: # Pod template
+    metadata: ...
+    spec: ... # Pod containers restartPolicy
+  status: ... # availableReplicas, conditions
+```
+
+#### Scaling and Rolling Updates
+```
+$ kubectl scale deploy/dev-web --replicas=4
+deployment "dev-web" scaled
+
+$ kubectl get deployments
+NAME     READY   UP-TO-DATE  AVAILABLE  AGE
+dev-web  4/4     4           4          20s
+
+$ kubectl edit deployment dev-web
+> opens text editor, triggers a rolling update
+```
+
+#### Rollbacks
+```
+$ kubectl create deploy ghost --image=ghost
+
+$ kubectl annotate deployment/ghost kubernetes.io/change-cause="kubectl create deploy ghost --image=ghost"
+
+$ kubectl get deployments ghost -o yaml
+kubernetes.io/change-cause: kubectl..
+
+$ kubectl set image deployment/ghost ghost=ghost:09 --all
+
+$ kubectl get pods
+
+NAME                    READY  STATUS            RESTARTS  AGE
+ghost-2141819201-tcths  0/1    ImagePullBackOff  0         1m
+
+$ kubectl rollout undo deployment/ghost ; kubectl get pods
+
+NAME                    READY  STATUS   RESTARTS  AGE
+ghost-3378155678-eq5i6  1/1    Running  0         7s
+```
+
+#### Using DaemonSets
+
+This controller ensures that a single pod exists **on each node in the cluster**. Every Pod uses the same image.
+
+Use `kind: DaemonSet`.
+
+#### Labels
+```
+$ kubectl get pods -l run=ghost
+NAME                    READY  STATUS   RESTARTS  AGE
+ghost-3378155678-eq5i6  1/1    Running  0         10m   # assigned a label
+```
+
+### Helm and Kustomize
+
+- Helm - a package manager for Kubernetes (like yum, apt)
+  - A standard way to manage Kubernetes applications, reducing the complexity of deploying & maintaining
+  - Chart - similar to a package
+  - Tarball put in a repository for deployment and sharing
+  - Template - installation and removal scripts - **manifests**
+  - Deployment created based on the Chart
+  - Charts can be customized using `values.yaml` files or cmd arguments
+  - Integrates well with CI/CD pipelines
+  - Chart repositories, [Artifact Hub](https://artifacthub.io/)
+  - Deploying a Chart: `helm install`
+- Kustomize
+  - Overcomes the limitations of using pure templating systems
+  - You can define a base set of resources and then apply overlays
+  - A more modular and maintainable approach to managing k8s configurations
+  - Strategic merging and patches instead of templating
+  - Is a built-in feature: `kubectl kustomize dir`, `kubectl apply -k dir`
+  - `kustomization.yaml` lists the resources to manage and instructions on how to modify them
+  - For instance: base contains the common deployment config, while overlays can adjust replicaCounts or image tags
+  - Patches let you apply fine-grained changes
+  - Includes `configMapGenerator`, `secretGenerator` - creating resources dynamically
+
 ### Ingress
 - Ingress - data **entering** the system, i.e. visitor's request to view a webpage
 - Egress - data **leaving** the system, i.e. file being downloaded from a server
