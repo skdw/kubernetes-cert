@@ -239,6 +239,16 @@ Controller - a control loop that watches the state of your cluster, then makes o
 - Most updates can be configured by editing a YAML file and running `kubectl apply`.
 - In-use config modification with `kubectl edit`
 
+When we create a deployment, then automatically:
+- it creates a ReplicaSet
+- ReplicaSet creates a Pod
+- the Pod will download or run whatever container we have configured
+
+We can then use a deployment to upgrade or roll back our ReplicaSet, steps:
+- edit YAML file
+- run `kubectl apply` or `kubectl edit`
+- previous versions of the ReplicaSets are kept, allowing a rollback to return to a previous config
+
 #### Labels
 
 Arbitrary user-defined key-value pairs which can be attached to any resource, essential to administration.
@@ -258,7 +268,7 @@ $ kubectl get deployments,rs,pods -o yaml
   template: # Pod template
     metadata: ...
     spec: ... # Pod containers restartPolicy
-  status: ... # availableReplicas, conditions
+  status: ... # generated output: availableReplicas, conditions
 ```
 
 #### Scaling and Rolling Updates
@@ -294,6 +304,9 @@ $ kubectl rollout undo deployment/ghost ; kubectl get pods
 
 NAME                    READY  STATUS   RESTARTS  AGE
 ghost-3378155678-eq5i6  1/1    Running  0         7s
+
+kubectl rolling-update # directly on ReplicationControllers, but this is done on the client side
+# less safe - hence, if you close your client, the rolling update will stop
 ```
 
 #### Using DaemonSets
@@ -331,6 +344,53 @@ ghost-3378155678-eq5i6  1/1    Running  0         10m   # assigned a label
   - For instance: base contains the common deployment config, while overlays can adjust replicaCounts or image tags
   - Patches let you apply fine-grained changes
   - Includes `configMapGenerator`, `secretGenerator` - creating resources dynamically
+
+### Volumes and Data
+
+- The persistent storage available to Kubernetes
+- Many backend options available: local storage, Ceph, dynamic storage provider AWS Google
+- When storage is given to a Pod, all of its containers inside have equal access
+- Containers can talk to each other by writing to / reading from shared storage
+
+#### Volume
+
+- A Kubernetes volume shares the Pod lifetime, not the containers within. Should a container terminate, the data would **continue to be available** to the new container.
+- Container Storage Interface (CSI) is a standard API that enables k8s to connect with various storage systems.
+- Each Volume requires a name, a type and a mount point.
+- Access modes: `ReadWriteOnce` (rw by a single node), `ReadOnlyMany` (ro by multiple nodes), `ReadWriteMany` (rw by multiple nodes)
+- Volume types:
+  - Cloud CGE `GCEpersistentDisk`, AWS `awsElasticBlockStore` - mount disks in Pods
+  - `emptydir` - empty directory that gets erased when the Pod dies
+  - `hostPath` - mounts a resource from the host node filesystem: directory, file socket, block device
+  - `DirectoryOrCreate` `FileOrCreate` create the resources on the host
+  - `NFS` `iSCSI` network interfaces
+  - `azureDisk` `azureFile` `csi` `gitRepo` `local` `persistentVolumeClaim` etc - CSI allows for even more flexibility
+
+#### Persistent Volume
+
+- A storage abstraction used to retain data longer than the Pod using it.
+- Allows for empty or pre-populated volumes to be claimed by a Pod using `PersistentVolumeClaim`, then outlive the Pod.
+- Data inside can be used by another Pod, or as a means of retrieving data.
+
+- `kubectl get pv` - actual physical or virtual storage resource, analogy: parking spot
+- `kubectl get pvc` - request for storage by a user (or a Pod), analogy: parking ticket
+
+`ResourceQuota` can limit PVC count and usage
+
+`StorageClass` `kubectl get sc` - enables dynamic provisioning of storage i.e. NFS client
+
+Upon release - Persistent Volume Reclaim Policy: Retain / Recycle / Delete (default);  whether to keep/remove pv on pvc removed
+
+#### Secrets / ConfigMaps
+
+- These are two API objects to provide data to a Pod
+- Secret data is **base64 encoded**; it is not encrypted! It can be used as an env variable in a Pod
+- ConfigMap data is **neither encrypted**, nor encoded; just plain raw
+```
+kubectl create secret generic mysql --from-literal=password=root
+```
+For encryption, `EncryptionConfiguration` is needed with a key and proper identity
+Then, the kube-apiserver needs the `--encryption-provider-config` flag set to a provider such as kms
 
 ### Ingress
 - Ingress - data **entering** the system, i.e. visitor's request to view a webpage
