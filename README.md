@@ -196,6 +196,10 @@ key-value maps
 
 `kubectl annotate pods --all description='Production Pods' -n prod`
 
+Labels vs Annotations:
+- Labels can be used to select objects and to find collections of objects that satisfy certain conditions
+- Annotations are not used to identify and select objects
+
 #### Verbose watch REST API requests
 
 `kubectl --v=10 get pods firstpod`
@@ -392,10 +396,86 @@ kubectl create secret generic mysql --from-literal=password=root
 For encryption, `EncryptionConfiguration` is needed with a key and proper identity
 Then, the kube-apiserver needs the `--encryption-provider-config` flag set to a provider such as kms
 
+### Services
+
+A service is an agent for exposing Pods - it gets traffic from the outside world to a pod, or from one pod to another.
+
+Four types of services:
+- `ClusterIP` - internally-facing IP address
+- `NodePort` - static IP address accessible to the outside world
+- `LoadBalancer` - similar to `NodePort` but spreads the traffic to multiple Pods; handles pods replacements
+- `ExternalName` - an alias for interacting with DNS
+```
+$ kubectl expose deployment/nginx --port=80 --type=NodePort
+
+$ kubectl get svc
+
+NAME        TYPE       CLUSTER-IP  EXTERNAL-IP  PORT(S)        AGE
+kubernetes  ClusterIP  10.0.0.1    <none>       443/TCP        18h
+nginx       NodePort   10.0.0.112  <none>       80:31230/TCP   5s
+
+$ kubectl get svc nginx -o yaml
+```
+The service used port 80 and generated a random port on all the nodes -> `get svc` shows a random port 31230 exposed
+
+`kubectl proxy` -> `Starting to serve at 127.0.0.1:8001` -> a local proxy for development
+  - a quick way to check the services
+  - captures the shell, unless in the background
+
+DNS registration: tools `nslookup`, `dig`, `nc`, `wireshark`...
+
 ### Ingress
+
+A controller allowing to expose Pods similarly to services, but more efficiently. Instead of individual services for each of the pods, we can set up a controller that handles all of the traffic.
+
+When a new endpoint is created, the daemon uses the set of rules to allow inbound connection to a service.
+
 - Ingress - data **entering** the system, i.e. visitor's request to view a webpage
+  - Internet -> **Ingress** -> Services
 - Egress - data **leaving** the system, i.e. file being downloaded from a server
 Traffic is handled by proper services
+
+Ingress is an API object: `kubectl get ingress`
+
+[Istio](https://istio.io/) service mesh: load balancing, service-to-service authentication, monitoring
+
+Ingress limitations: Support only HTTP(S) routing and TLS termination, no native support for TCP, gRPC...
+
+#### Gateway API
+
+Imagine you have a big building (your Kubernetes cluster) and you want to control how people (network traffic) get in and where they go inside.
+
+Ingress (the old way): Think of Ingress as a single, somewhat limited front door. It could get people in, but if you wanted fancy rules like "only people wearing red hats go to the kitchen," it was hard to set up.
+
+Gateway API (the new, better way): This is like having a whole, smart reception area with different types of doors and a clear system for guiding people.
+
+### Scheduling
+
+Affect where pods will be deployed based on labels features
+
+`kube-scheduler` agent schedules Pod placements: it looks at nodes' labels to determine which nodes will run a Pod -> **affinity** and **anti-affinity**
+
+- **Taint** - label applied to **Nodes** that tells certain pods to avoid the node
+- **Toleration** - similar, applied to **Pods**; if a node has been tainted, a Pod requires a toleration to be deployed
+- **NodeSelector** - call out a particular node for a pod to run on
+- We can also deploy our own custom scheduler, and run it alongside of the existing `kube-scheduler` agent
+
+Node selection in `kube-scheduler`:
+- *Filtering stage*: identifies the set of Nodes where the Pod can be scheduled
+- *Scoring stage*: rates the remaining nodes to determine the best Pod placement
+- The Pod is given to the Node with the highest ranking by `kube-scheduler`.
+
+Scheduling profiles available, plugins can be used: `ImageLocality`, `TaintToleration`, `NodeName`, `NodePorts`, `NodeAffinity`...
+
+API object `KubeSchedulerConfiguration`, with profiles scheduler name, plugins...
+
+Pods can include scheduler name in its `.spec.schedulerName`
+
+[EXAM] Scheduling for maintenance / cluster update
+- `kubectl drain NODE` - drain node in preparation for maintenance
+- `kubectl cordon NODE` - mark node as unschedulable
+
+Command to view the scheduler: `kubectl get events`
 
 ### Getting started
 
