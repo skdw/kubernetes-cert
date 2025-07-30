@@ -477,6 +477,44 @@ Pods can include scheduler name in its `.spec.schedulerName`
 
 Command to view the scheduler: `kubectl get events`
 
+### Logging & Troubleshooting
+
+K8s does not have a built-in cluster-wide logging utility. Instead, secondary products to aggregate (both CNCF projects):
+- **Fluentd** - logs aggregation & processing
+- **Prometheus** - metric aggregation, Grafana visualizations
+
+Metic Server: collects CPU usage, memory, disk usage -> exposes a standard API `/apis/metrics/k8s.io/`, which can be consumed by other agents, such as autoscalers
+
+Basic flow of troubleshooting:
+- Use standard linux tools. If not available, deploy a similar tool, like `busybox`.
+  ```
+  $ kubectl create deploy busybox --image=busybox -- sleep 3600
+  $ kubectl exec -ti <busybox_pod> -- /bin/sh
+  ```
+- `kubectl logs pod-name`
+
+#### Cluster start sequence
+
+- `systemctl status kubelet.service`
+  - `/etc/systemd/system/kubelet.service.d/10-kubeadm.conf`
+- `staticPodPath` indicates the directory where kubelet will read every yaml file and start every pod
+
+#### kubectl plugin manager - `krew`
+
+- `kubectl krew search`
+- `kubectl krew install tail`
+
+Traffic monitoring with `sniff` plugin + Wireshark
+
+### Custom resource definitions
+
+Two ways to add custom resources:
+- Adding a new object to the existing cluster
+  - `kind: CustomResourceDefinition` -> `kind: BackUp` (a custom defined kind)
+  - A CRD allows the resource to be deployed in a namespace or be available in the entire cluster.
+- Aggregated APIs, add a secondary API server to the cluster
+  - API calls accepted by `kube-apiserver` and forwarded to the secondary API server to be handled
+
 ### Getting started
 
 #### Tools
