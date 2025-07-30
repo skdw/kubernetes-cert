@@ -515,6 +515,34 @@ Two ways to add custom resources:
 - Aggregated APIs, add a secondary API server to the cluster
   - API calls accepted by `kube-apiserver` and forwarded to the secondary API server to be handled
 
+### Security
+
+LFS260 - a separate course on k8s security
+
+How Pods use security policies, like SELinux
+
+On each API request, `kube-apiserver` goes through a 3-step process:
+- Authentication (X509 certificate, a token or a webhook to an LDAP server)
+- Authorization (RBAC - role-based access control)
+- Admission controller (8-9 shell scripts that can do many things)
+
+Security contexts limit what processes running in containers can do. For example, the UID of the process, the Linux capabilities, and the filesystem group can be limited. e.g. `runAsNonRoot`
+
+Network policies - by default all pods can reach each other; however isolation can be introduced, e.g. `NetworkPolicy -> ingress -> ipBlock`
+
+### High Availability
+
+kubeadm provides the integrated ability to join multiple cp nodes with collocated etcd databases -> higher redundancy, fault tolerance
+
+To ensure that workers and other control planes continue to have access, it is a good idea to use a load balancer.
+
+- Collocated databases - two or more cp servers joined to the cluster
+- Non-collocated databases - using an external cluster of etcd allows for less interruption should a node fail (however setup takes more work to configure)
+
+## Labs
+
+`killer.sh` exam simulator - 2 attempts
+
 ### Getting started
 
 #### Tools
@@ -718,6 +746,10 @@ kubectl get jobs.batch sleepy -o yaml
 ```
 
 ## CKA Exam
+
+### [CKA Curriculum](https://github.com/cncf/curriculum/blob/master/CKA_Curriculum_v1.33.pdf)
+
+### [Exam resources](https://docs.linuxfoundation.org/tc-docs/certification/certification-resources-allowed#certified-kubernetes-administrator-cka-and-certified-kubernetes-application-developer-ckad) - available during the exam
 
 ### How I passed
 - [YouTube](https://www.youtube.com/watch?v=dHXgg9fbP8E)
