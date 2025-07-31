@@ -221,8 +221,12 @@ Controller - a control loop that watches the state of your cluster, then makes o
   - useful to setup a logging daemon on each of nodes
   - always runs a single Pod on each node
 - **StatefulSet** - each pod checked as an unique unit with ensured state; stable storage, stable network
-- **HorizontalPodAutoscaler** - stable resource, scales Replication Controllers based on target CPU usage
-- **VerticalPodAutoscaler** - adjusts the amount of CPU/memory requested by Pods
+- **HorizontalPodAutoscaler**
+  - stable resource, scales Replication Controllers based on target CPU usage
+  - response to increased load is to **deploy more Pods**
+- **VerticalPodAutoscaler**
+  - adjusts the amount of CPU/memory requested by Pods
+  - response to increased load is to assign more resources (memory/CPU) to the **Pods that are already running**
 - **ClusterAutoscaler** - adds nodes to the cluster if unable to deploy a Pod; removes on low utilization
 - **Job** - runs until the number of completions reached
 - **CronJob** - runs on regular basis
