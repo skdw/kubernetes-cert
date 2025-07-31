@@ -545,6 +545,8 @@ To ensure that workers and other control planes continue to have access, it is a
 
 ## Labs
 
+[KillerCoda](https://killercoda.com/playgrounds/scenario/cka) playground CKA scenario
+
 `killer.sh` exam simulator - 2 attempts
 
 ### Getting started
